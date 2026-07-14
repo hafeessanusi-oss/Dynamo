@@ -1,0 +1,59 @@
+name: Verify Task Configuration and Code
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tomli pytest
+
+    - name: Validate task.toml Format
+      run: |
+        python -c '
+        import tomli
+        with open("task.toml", "rb") as f:
+            data = tomli.load(f)
+        
+        assert isinstance(data.get("artifacts"), list), "artifacts must be a top-level array"
+        assert "task" in data, "Missing [task] section"
+        assert "metadata" in data, "Missing [metadata] section"
+        print("✓ task.toml structure is valid!")
+        '
+
+    - name: Run Pytest Verifier
+      run: |
+        sudo mkdir -p /app && sudo chmod 777 /app
+        
+        # Check if the test file exists before running
+        if [ ! -f "tests/test_outputs.py" ]; then
+            echo "Error: tests/test_outputs.py does not exist."
+            exit 1
+        fi
+
+        pytest tests/test_outputs.py -rA
+        
+        if [ $? -eq 0 ]; then
+            echo "1" > /app/reward.txt
+            echo "Verification Success: Reward 1 generated."
+        else
+            echo "0" > /app/reward.txt
+            echo "Verification Failed: Reward 0 generated."
+            exit 1
+        fi
